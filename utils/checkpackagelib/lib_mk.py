@@ -327,3 +327,23 @@ class VariableWithBraces(_CheckFunction):
             return ["{}:{}: use $() to delimit variables, not ${{}}"
                     .format(self.filename, lineno),
                     text]
+
+
+class Version(_CheckFunction):
+    VERSION = re.compile(r"^([A-Z0-9_]+)_VERSION\s*[\+|:|]*=\s*(.*)")
+    VERSION_FAIL = re.compile("v[0-9]+")
+
+    def check_line(self, lineno, text):
+        m = self.VERSION.search(text)
+
+        if m is None:
+            return
+
+        variable, assignment = m.group(1, 2)
+
+        if self.VERSION_FAIL.match(assignment):
+            return ["{}:{}: remove 'v' prefix from {} of variable {}_VERSION "
+                    "and add to {}_SITE"
+                    .format(self.filename, lineno, assignment, variable,
+                            variable),
+                    text]
