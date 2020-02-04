@@ -40,7 +40,7 @@ class HashType(_CheckFunction):
         if len(fields) < 2:
             return
 
-        htype, hexa = fields[:2]
+        htype, hexa, filename = fields[:3]
         if htype == "none":
             return
         if htype not in self.len_of_hash.keys():
@@ -53,3 +53,8 @@ class HashType(_CheckFunction):
                     .format(self.filename, lineno, self.url_to_manual),
                     text,
                     "expected {} hex digits".format(self.len_of_hash[htype])]
+        if not re.match(re.escape("^{}  {}  {}.*$".format(
+                htype, hexa, filename)), text):
+            return ["{}:{}: separation does not match expectation "
+                    "({}#adding-packages-hash)"
+                    .format(self.filename, lineno, self.url_to_manual), text]
