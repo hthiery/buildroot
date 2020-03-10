@@ -1,0 +1,6 @@
+vendor: point-to-point_protocol_project
+product: point-to-point_protocol
+
+cves:
+  CVE-2020-8597:
+    patch: 0001-pppd-Fix-bounds-check.patch
