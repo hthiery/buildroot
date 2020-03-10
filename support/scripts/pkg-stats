@@ -31,6 +31,7 @@ import distutils.version
 import time
 import gzip
 import sys
+import yaml
 from urllib3 import HTTPSConnectionPool
 from urllib3.exceptions import HTTPError
 from multiprocessing import Pool
@@ -108,7 +109,9 @@ class Package:
         self.current_version = None
         self.url = None
         self.url_worker = None
+        self.cve_map = None
         self.cves = list()
+        self.cves_fixed = list()
         self.latest_version = {'status': RM_API_STATUS_ERROR, 'version': None, 'id': None}
         self.status = {}
 
@@ -251,6 +254,34 @@ class Package:
         """
         return cve in self.all_ignored_cves.get(self.pkgvar(), [])
 
+    def is_cve_fixed(self, cve):
+        try:
+            if cve in self.cve_map['cves']:
+                if self.cve_map['cves'][cve]['patch']:
+                    return True
+        except KeyError:
+            return False
+
+    def set_cve_map(self):
+        """
+        Read the CVE YAML file and set the buildroot package name
+        """
+        cvefile = self.path.replace(".mk", ".cve")
+        if not os.path.exists(cvefile):
+            return
+        with open(cvefile, "r") as f:
+            try:
+                info = yaml.load(f, Loader=yaml.Loader)
+            except yaml.scanner.ScannerError:
+                print("warning {} cannot be loaded".format(cvefile))
+                return
+            # we need at least the CPE vendor and product
+            if not all(k in info for k in ('vendor','product')):
+                print("warning {} has no valid CVE map".format(cvefile))
+                return
+            self.cve_map = info
+            CVE.set_br_name_map(self.name, info['vendor'], info['product'])
+
     def set_developers(self, developers):
         """
         Fills in the .developers and .status['developers'] field
@@ -281,6 +312,8 @@ class Package:
 
 
 class CVE:
+    all_vendor_product_map = dict()
+
     """An accessor class for CVE Items in NVD files"""
     def __init__(self, nvd_cve):
         """Initialize a CVE from its NVD JSON representation"""
@@ -340,11 +373,26 @@ class CVE:
             for cve in content:
                 yield cls(cve['cve'])
 
+    @classmethod
+    def set_br_name_map(cls, br_pkg_name, vendor, product):
+        CVE.all_vendor_product_map[(vendor, product)] = br_pkg_name
+
+    def get_br_pkg_name(self):
+        """
+        Return the buildroot package name if the package has a CPE mapping
+        entry for vendor and product.
+        """
+        for vendor in self.nvd_cve['affects']['vendor']['vendor_data']:
+            for product in vendor['product']['product_data']:
+                if (vendor['vendor_name'], product['product_name']) in CVE.all_vendor_product_map:
+                    return CVE.all_vendor_product_map[vendor['vendor_name'], product['product_name']]
+        return None
+
     def each_product(self):
         """Iterate over each product section of this cve"""
         for vendor in self.nvd_cve['affects']['vendor']['vendor_data']:
             for product in vendor['product']['product_data']:
-                yield product
+                yield (vendor, product)
 
     @property
     def identifier(self):
@@ -352,11 +400,11 @@ class CVE:
         return self.nvd_cve['CVE_data_meta']['ID']
 
     @property
-    def pkg_names(self):
+    def products(self):
         """The set of package names referred by this CVE definition"""
-        return set(p['product_name'] for p in self.each_product())
+        return set(p['product_name'] for (v, p) in self.each_product())
 
-    def affects(self, br_pkg):
+    def affects(self, br_pkg, guess):
         """
         True if the Buildroot Package object passed as argument is affected
         by this CVE.
@@ -364,13 +412,19 @@ class CVE:
         if br_pkg.is_cve_ignored(self.identifier):
             return False
 
-        for product in self.each_product():
-            if product['product_name'] != br_pkg.name:
-                continue
+        for (vendor, product) in self.each_product():
+            if br_pkg.cve_map:
+                if vendor['vendor_name'] != br_pkg.cve_map['vendor'] \
+                        or product['product_name'] != br_pkg.cve_map['product']:
+                    continue
+            else:
+                if product['product_name'] != br_pkg.name:
+                    continue
 
             for v in product['version']['version_data']:
                 if v["version_affected"] == "=":
                     if br_pkg.current_version == v["version_value"]:
+                        print(br_pkg.current_version, v["version_value"])
                         return True
                 elif v["version_affected"] == "<=":
                     pkg_version = distutils.version.LooseVersion(br_pkg.current_version)
@@ -607,10 +661,34 @@ def check_package_cves(nvd_path, packages):
         os.makedirs(nvd_path)
 
     for cve in CVE.read_nvd_dir(nvd_path):
-        for pkg_name in cve.pkg_names:
-            if pkg_name in packages and cve.affects(packages[pkg_name]):
+        # check if the buildroot package has a cve mapping
+        pkg_name = cve.get_br_pkg_name()
+        if pkg_name:
+            if cve.affects(packages[pkg_name], guess=False):
+                if packages[pkg_name].is_cve_fixed(cve.identifier):
+                    print(pkg_name, 'fixed')
+                    packages[pkg_name].cves_fixed.append(cve.identifier)
+                    continue
+                print(pkg_name, 'affected')
                 packages[pkg_name].cves.append(cve.identifier)
+        # try to find a buildroot package that matches the cve product name
+        else:
+            for pkg_name in cve.products:
+                if pkg_name in packages and cve.affects(packages[pkg_name], guess=True):
+                    packages[pkg_name].cves.append(cve.identifier)
 
+    # set cve status
+    for pkg_name in packages:
+        if packages[pkg_name].cve_map:
+            if len(packages[pkg_name].cves):
+                packages[pkg_name].status['cve'] = ('error', '{} CVE(s) found with map'.format(len(packages[pkg_name].cves)))
+            else:
+                packages[pkg_name].status['cve'] = ('ok', 'no CVE found')
+        else:
+            if len(packages[pkg_name].cves):
+                packages[pkg_name].status['cve'] = ('warning', '{} CVE(s) found by guess'.format(len(packages[pkg_name].cves)))
+            else:
+                packages[pkg_name].status['cve'] = ('info', 'no CVE found due to no affected or not matching')
 
 def calculate_stats(packages):
     stats = defaultdict(int)
@@ -1036,6 +1114,7 @@ def __main__():
         pkg.set_current_version()
         pkg.set_url()
         pkg.set_developers(developers)
+        pkg.set_cve_map()
     print("Checking URL status")
     check_package_urls(packages)
     print("Getting latest versions ...")
