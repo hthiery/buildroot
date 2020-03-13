@@ -1,0 +1,45 @@
+vendor: audiofile
+product: audiofile
+
+cves:
+  CVE-2017-6827:
+    patch: 0003-Always-check-the-number-of-coefficients.patch
+
+  CVE-2017-6828:
+    patch: 0003-Always-check-the-number-of-coefficients.patch
+
+  CVE-2017-6832:
+    patch: 0003-Always-check-the-number-of-coefficients.patch
+
+  CVE-2017-6833:
+    patch: 0003-Always-check-the-number-of-coefficients.patch
+
+  CVE-2017-6835:
+    patch: 0003-Always-check-the-number-of-coefficients.patch
+
+  CVE-2017-6837:
+    patch: 0003-Always-check-the-number-of-coefficients.patch
+
+  CVE-2017-6829:
+    patch: 0004-clamp-index-values-to-fix-index-overflow-in-IMA.cpp.patch
+
+  CVE-2017-6830:
+    patch: 0005-Check-for-multiplication-overflow-in-sfconvert.patch
+
+  CVE-2017-6834:
+    patch: 0005-Check-for-multiplication-overflow-in-sfconvert.patch
+
+  CVE-2017-6836:
+    patch: 0005-Check-for-multiplication-overflow-in-sfconvert.patch
+
+  CVE-2017-6838:
+    patch: 0005-Check-for-multiplication-overflow-in-sfconvert.patch
+
+  CVE-2017-6831:
+    patch: 0006-Actually-fail-when-error-occurs-in-parseFormat.patch
+
+  CVE-2017-6839:
+    patch: 0007-Check-for-multiplication-overflow-in-MSADPCM-decodeS.patch
+
+  CVE-2015-7747:
+    patch: 0008-CVE-2015-7747.patch
