@@ -1,0 +1,36 @@
+comment "netopeer2 needs a toolchain w/ C++, threads, dynamic library, host gcc >= 4.8"
+	depends on BR2_USE_MMU
+	depends on BR2_STATIC_LIBS || !BR2_INSTALL_LIBSTDCPP \
+		|| !BR2_TOOLCHAIN_HAS_THREADS_NPTL || !BR2_HOST_GCC_AT_LEAST_4_8
+
+config BR2_PACKAGE_NETOPEER2
+	bool "netopeer2"
+	depends on BR2_USE_MMU # sysrepo
+	depends on !BR2_STATIC_LIBS # sysrepo
+	depends on BR2_INSTALL_LIBSTDCPP # sysrepo
+	depends on BR2_TOOLCHAIN_HAS_THREADS_NPTL
+	select BR2_PACKAGE_LIBYANG
+	select BR2_PACKAGE_LIBNETCONF2
+	select BR2_PACKAGE_PCRE # sysrepo
+	select BR2_PACKAGE_PCRE_UCP # syrepo
+	select BR2_PACKAGE_SYSREPO
+	select BR2_PACKAGE_OPENSSL
+	select BR2_PACKAGE_LIBSSH
+	select BR2_PACKAGE_LIBSSH_SERVER
+
+	help
+	  Netopeer2 is a set of tools implementing network
+	  configuration tools based on the NETCONF Protocol.
+
+	  This is the server part.
+
+	  https://github.com/CESNET/Netopeer2
+
+if BR2_PACKAGE_NETOPEER2
+
+config BR2_PACKAGE_NETOPEER2_CLI
+       bool "cli"
+       help
+         Enable netopeer2 CLI.
+
+endif
